@@ -1,0 +1,118 @@
+<div class="min-h-screen bg-[url('https://cdn.pixabay.com/photo/2023/10/26/17/57/geometric-8343360_1280.jpg')] bg-cover bg-fixed bg-center">
+  <!-- Dark overlay to make text readable -->
+  <div class="min-h-screen bg-black/90 backdrop-blur-sm flex flex-col">
+    
+    <!-- Header -->
+    <header class="border-b border-gray-800 bg-black/50 sticky top-0 z-50 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 md:px-6 py-4">
+        <div class="flex items-center justify-between mb-4">
+          <!-- Branding -->
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-tenno-gold to-tenno-goldDim rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(212,175,55,0.3)]">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-2xl md:text-3xl font-mono font-bold text-white tracking-wide uppercase leading-none">
+                Tenno's Guild
+              </h1>
+              <p class="text-xs text-gray-400 font-sans tracking-[0.2em] uppercase">Command Center // Origin System</p>
+            </div>
+          </div>
+
+          <!-- Date/Status -->
+          <div class="hidden md:block text-right">
+            <div class="text-[10px] text-gray-500 tracking-widest uppercase">System Date</div>
+            <div class="text-tenno-cyan font-mono text-xl font-bold glow-text">{{ today() }}</div>
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex overflow-x-auto gap-1 bg-black/40 p-1 rounded-lg border border-gray-800">
+          
+          <button (click)="setTab('relay')" 
+                  class="flex items-center gap-2 px-4 py-2 rounded transition-all whitespace-nowrap font-mono text-sm uppercase tracking-wide"
+                  [class.bg-gradient-to-r]="activeTab() === 'relay'"
+                  [class.from-tenno-gold]="activeTab() === 'relay'"
+                  [class.to-tenno-goldDim]="activeTab() === 'relay'"
+                  [class.text-black]="activeTab() === 'relay'"
+                  [class.font-bold]="activeTab() === 'relay'"
+                  [class.text-gray-400]="activeTab() !== 'relay'"
+                  [class.hover:text-white]="activeTab() !== 'relay'">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            Relay Services
+          </button>
+
+          <button (click)="setTab('media')" 
+                  class="flex items-center gap-2 px-4 py-2 rounded transition-all whitespace-nowrap font-mono text-sm uppercase tracking-wide"
+                  [class.bg-gradient-to-r]="activeTab() === 'media'"
+                  [class.from-tenno-gold]="activeTab() === 'media'"
+                  [class.to-tenno-goldDim]="activeTab() === 'media'"
+                  [class.text-black]="activeTab() === 'media'"
+                  [class.font-bold]="activeTab() === 'media'"
+                  [class.text-gray-400]="activeTab() !== 'media'"
+                  [class.hover:text-white]="activeTab() !== 'media'">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            MediaFlow
+          </button>
+
+          <button (click)="setTab('codex')" 
+                  class="flex items-center gap-2 px-4 py-2 rounded transition-all whitespace-nowrap font-mono text-sm uppercase tracking-wide"
+                  [class.bg-gradient-to-r]="activeTab() === 'codex'"
+                  [class.from-tenno-gold]="activeTab() === 'codex'"
+                  [class.to-tenno-goldDim]="activeTab() === 'codex'"
+                  [class.text-black]="activeTab() === 'codex'"
+                  [class.font-bold]="activeTab() === 'codex'"
+                  [class.text-gray-400]="activeTab() !== 'codex'"
+                  [class.hover:text-white]="activeTab() !== 'codex'">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+            Codex
+          </button>
+
+          <button (click)="setTab('telemetry')" 
+                  class="flex items-center gap-2 px-4 py-2 rounded transition-all whitespace-nowrap font-mono text-sm uppercase tracking-wide"
+                  [class.bg-gradient-to-r]="activeTab() === 'telemetry'"
+                  [class.from-tenno-gold]="activeTab() === 'telemetry'"
+                  [class.to-tenno-goldDim]="activeTab() === 'telemetry'"
+                  [class.text-black]="activeTab() === 'telemetry'"
+                  [class.font-bold]="activeTab() === 'telemetry'"
+                  [class.text-gray-400]="activeTab() !== 'telemetry'"
+                  [class.hover:text-white]="activeTab() !== 'telemetry'">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
+            Hardware Link
+          </button>
+
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 md:px-6 py-8 overflow-hidden">
+      
+      @if (activeTab() === 'relay') {
+        <app-relay />
+      }
+
+      @if (activeTab() === 'media') {
+        <app-media-flow />
+      }
+
+      @if (activeTab() === 'codex') {
+        <app-codex />
+      }
+
+      @if (activeTab() === 'telemetry') {
+        <app-telemetry />
+      }
+
+    </main>
+    
+    <!-- Footer -->
+    <footer class="border-t border-gray-800 bg-black/60 p-4 text-center">
+       <p class="text-xs text-gray-500 font-mono">
+         TENNO'S GUILD // PROTOCOL v2.0 // <span class="text-tenno-gold">AUTHORIZED USE ONLY</span>
+       </p>
+    </footer>
+  </div>
+</div>

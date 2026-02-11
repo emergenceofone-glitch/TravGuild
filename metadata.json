@@ -1,0 +1,5 @@
+{
+  "name": "Tenno's Guild Command",
+  "description": "A unified command center for Guild MediaFlow management, Operator services, Codex archives, and Hardware Telemetry monitoring.",
+  "requestFramePermissions": []
+}
