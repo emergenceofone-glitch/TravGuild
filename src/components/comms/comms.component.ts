@@ -2,7 +2,7 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GuildService } from '../../services/guild.service';
-import { GoogleGenAI, SchemaType } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 
 interface SocialPost {
   handle: string;
@@ -53,9 +53,10 @@ interface SocialPost {
             </div>
 
             <textarea class="w-full flex-1 bg-tenno-dark border border-gray-700 rounded p-4 text-gray-300 focus:outline-none focus:border-tenno-gold transition-colors min-h-[150px] resize-none font-sans text-lg"
+                      [class.border-tenno-red]="charCount() > 280"
+                      [class.focus:border-tenno-red]="charCount() > 280"
                       placeholder="Compose message for broadcast..."
-                      [(ngModel)]="postContent"
-                      maxlength="280"></textarea>
+                      [(ngModel)]="postContent"></textarea>
             
             <!-- Grounding Sources Display -->
             @if (groundingMetadata()) {
@@ -89,9 +90,18 @@ interface SocialPost {
               </button>
 
               <div class="flex items-center gap-4">
-                <span class="text-xs font-mono" [class.text-tenno-red]="charCount() > 280">{{ charCount() }} / 280</span>
+                <span class="text-xs font-mono transition-colors duration-200" 
+                      [class.text-tenno-red]="charCount() > 280"
+                      [class.font-bold]="charCount() > 280"
+                      [class.text-gray-500]="charCount() <= 280">
+                  {{ charCount() }} / 280
+                  @if (charCount() > 280) {
+                    <span class="ml-1 animate-pulse">(! OVER LIMIT)</span>
+                  }
+                </span>
+
                 <button (click)="transmitPost()" [disabled]="isTransmitting() || postContent().length === 0 || charCount() > 280"
-                        class="px-6 py-2 bg-tenno-gold text-black font-bold uppercase tracking-wider rounded hover:bg-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                        class="px-6 py-2 bg-tenno-gold text-black font-bold uppercase tracking-wider rounded hover:bg-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm disabled:bg-gray-700 disabled:text-gray-500">
                   @if(isTransmitting()) {
                     <span>SENDING...</span>
                   } @else {
@@ -178,7 +188,7 @@ export class CommsComponent {
   service = inject(GuildService);
   ai: GoogleGenAI | null = null;
   
-  postContent = signal('');
+  postContent = signal("The latest Tenno's Guild update is live! Check out our new media pipeline features and operator services.");
   includeTrends = signal(false);
   isTransmitting = signal(false);
   isGenerating = signal(false);
