@@ -83,6 +83,19 @@
             Hardware Link
           </button>
 
+          <button (click)="setTab('comms')" 
+                  class="flex items-center gap-2 px-4 py-2 rounded transition-all whitespace-nowrap font-mono text-sm uppercase tracking-wide"
+                  [class.bg-gradient-to-r]="activeTab() === 'comms'"
+                  [class.from-tenno-gold]="activeTab() === 'comms'"
+                  [class.to-tenno-goldDim]="activeTab() === 'comms'"
+                  [class.text-black]="activeTab() === 'comms'"
+                  [class.font-bold]="activeTab() === 'comms'"
+                  [class.text-gray-400]="activeTab() !== 'comms'"
+                  [class.hover:text-white]="activeTab() !== 'comms'">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3M3.75 6.75 12 3m0 0 8.25 3.75M3.75 6.75 12 15m0 0 8.25-8.25"/></svg>
+            Comms Link
+          </button>
+
         </nav>
       </div>
     </header>
@@ -104,6 +117,10 @@
 
       @if (activeTab() === 'telemetry') {
         <app-telemetry />
+      }
+
+      @if (activeTab() === 'comms') {
+        <app-comms />
       }
 
     </main>

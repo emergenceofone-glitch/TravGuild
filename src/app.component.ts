@@ -4,13 +4,14 @@ import { RelayComponent } from './components/relay/relay.component';
 import { CodexComponent } from './components/codex/codex.component';
 import { MediaFlowComponent } from './components/media/media-flow.component';
 import { TelemetryComponent } from './components/telemetry/telemetry.component';
+import { CommsComponent } from './components/comms/comms.component';
 
-type Tab = 'relay' | 'codex' | 'media' | 'telemetry';
+type Tab = 'relay' | 'codex' | 'media' | 'telemetry' | 'comms';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RelayComponent, CodexComponent, MediaFlowComponent, TelemetryComponent],
+  imports: [CommonModule, RelayComponent, CodexComponent, MediaFlowComponent, TelemetryComponent, CommsComponent],
   templateUrl: './app.component.html'
 })
 export class AppComponent {
