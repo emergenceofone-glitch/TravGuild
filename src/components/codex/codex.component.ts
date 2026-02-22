@@ -1,4 +1,4 @@
-import { Component, inject, OnDestroy } from '@angular/core';
+import { Component, inject, OnDestroy, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GuildService } from '../../services/guild.service';
 
@@ -107,9 +107,8 @@ export class CodexComponent implements OnDestroy {
   service = inject(GuildService);
   activeTimers: any = {};
 
-  totalCount = this.service.codex().length;
-  unlockedCount = () => this.service.codex().filter(e => !e.isLocked).length;
-  totalCountSig = () => this.service.codex().length;
+  totalCount = computed(() => this.service.codex().length);
+  unlockedCount = computed(() => this.service.codex().filter(e => !e.isLocked).length);
 
   startDecryption(id: string) {
     if (this.activeTimers[id]) return;

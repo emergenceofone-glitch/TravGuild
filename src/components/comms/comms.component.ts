@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { GuildService } from '../../services/guild.service';
 import { GoogleGenAI } from '@google/genai';
 
+declare var process: any;
+
 interface SocialPost {
   handle: string;
   content: string;
@@ -52,9 +54,11 @@ interface SocialPost {
                </label>
             </div>
 
-            <textarea class="w-full flex-1 bg-tenno-dark border border-gray-700 rounded p-4 text-gray-300 focus:outline-none focus:border-tenno-gold transition-colors min-h-[150px] resize-none font-sans text-lg"
+            <textarea class="w-full flex-1 bg-tenno-dark border rounded p-4 text-gray-300 focus:outline-none transition-colors min-h-[150px] resize-none font-sans text-lg"
                       [class.border-tenno-red]="charCount() > 280"
                       [class.focus:border-tenno-red]="charCount() > 280"
+                      [class.border-gray-700]="charCount() <= 280"
+                      [class.focus:border-tenno-gold]="charCount() <= 280"
                       placeholder="Compose message for broadcast..."
                       [(ngModel)]="postContent"></textarea>
             
@@ -63,7 +67,7 @@ interface SocialPost {
               <div class="text-xs bg-black/30 p-2 rounded border border-gray-800">
                 <span class="text-gray-500 font-mono block mb-1">DATA SOURCES:</span>
                 <div class="flex flex-wrap gap-2">
-                  @for (chunk of groundingMetadata().groundingChunks; track $index) {
+                  @for (chunk of groundingMetadata().groundingChunks || []; track $index) {
                     @if (chunk.web?.uri) {
                       <a [href]="chunk.web.uri" target="_blank" class="text-tenno-cyan hover:underline truncate max-w-[200px] block">
                         {{ chunk.web.title || 'Source Reference' }} ↗
