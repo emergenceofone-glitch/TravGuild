@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "ArsenalItem": {
+      "title": "ArsenalItem",
+      "description": "An item in the user's arsenal",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Warframe", "Primary", "Secondary", "Melee"] },
+        "status": { "type": "string", "enum": ["Mastered", "Forma-ing", "Building"] },
+        "formaCount": { "type": "number" },
+        "uid": { "type": "string" }
+      },
+      "required": ["name", "type", "status", "formaCount", "uid"]
+    },
+    "MediaClip": {
+      "title": "MediaClip",
+      "description": "A media clip in the user's pipeline",
+      "type": "object",
+      "properties": {
+        "game": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "quality": { "type": "string", "enum": ["S-Tier", "A-Tier", "B-Tier", "C-Tier"] },
+        "status": { "type": "string", "enum": ["Intake", "Processing", "Ready", "Published"] },
+        "platform": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["game", "date", "description", "quality", "status", "uid"]
+    },
+    "CodexEntry": {
+      "title": "CodexEntry",
+      "description": "A codex entry",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "discovery": { "type": "string" },
+        "value": { "type": "number" },
+        "location": { "type": "string" },
+        "operator": { "type": "string" },
+        "isLocked": { "type": "boolean" },
+        "decryptionProgress": { "type": "number" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["type", "discovery", "value", "location", "operator", "isLocked", "decryptionProgress", "uid"]
+    },
+    "Operator": {
+      "title": "Operator",
+      "description": "An operator in the relay",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "rep": { "type": "number" },
+        "region": { "type": "string" },
+        "service": { "type": "string" },
+        "status": { "type": "string", "enum": ["online", "offline", "busy"] },
+        "description": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "uid": { "type": "string" }
+      },
+      "required": ["name", "rep", "region", "service", "status", "description", "verified", "uid"]
+    },
+    "HiringRecord": {
+      "title": "HiringRecord",
+      "description": "A record of operator hiring activity",
+      "type": "object",
+      "properties": {
+        "operatorId": { "type": "string" },
+        "missionObjective": { "type": "string" },
+        "platinumOffered": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "requesterId": { "type": "string" }
+      },
+      "required": ["operatorId", "missionObjective", "platinumOffered", "timestamp", "requesterId"]
+    }
+  },
+  "firestore": {
+    "/arsenal/{itemId}": {
+      "schema": { "$ref": "#/entities/ArsenalItem" },
+      "description": "Global arsenal items"
+    },
+    "/clips/{clipId}": {
+      "schema": { "$ref": "#/entities/MediaClip" },
+      "description": "Global media clips"
+    },
+    "/codex/{entryId}": {
+      "schema": { "$ref": "#/entities/CodexEntry" },
+      "description": "Global codex entries"
+    },
+    "/operators/{operatorId}": {
+      "schema": { "$ref": "#/entities/Operator" },
+      "description": "Global operators"
+    },
+    "/hiring_history/{hiringId}": {
+      "schema": { "$ref": "#/entities/HiringRecord" },
+      "description": "Hiring history linked to operators"
+    }
+  }
+}

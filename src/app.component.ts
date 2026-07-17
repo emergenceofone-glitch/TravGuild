@@ -1,22 +1,58 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, signal, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RelayComponent } from './components/relay/relay.component';
 import { CodexComponent } from './components/codex/codex.component';
 import { MediaFlowComponent } from './components/media/media-flow.component';
 import { TelemetryComponent } from './components/telemetry/telemetry.component';
 import { CommsComponent } from './components/comms/comms.component';
+import { ArsenalComponent } from './components/arsenal/arsenal.component';
+import { auth, db } from './firebase';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { getDocFromServer, doc } from 'firebase/firestore';
+import { GlobalErrorService } from './services/error.service';
 
-type Tab = 'relay' | 'codex' | 'media' | 'telemetry' | 'comms';
+type Tab = 'relay' | 'codex' | 'media' | 'telemetry' | 'comms' | 'arsenal';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RelayComponent, CodexComponent, MediaFlowComponent, TelemetryComponent, CommsComponent],
+  imports: [CommonModule, RelayComponent, CodexComponent, MediaFlowComponent, TelemetryComponent, CommsComponent, ArsenalComponent],
   template: `
     <div class="min-h-screen bg-[url('https://cdn.pixabay.com/photo/2023/10/26/17/57/geometric-8343360_1280.jpg')] bg-cover bg-fixed bg-center">
       <!-- Dark overlay to make text readable -->
       <div class="min-h-screen bg-black/90 backdrop-blur-sm flex flex-col">
         
+        <!-- Global Error Banner -->
+        @if (errorService.currentError()) {
+          <div class="bg-red-500/20 border-b border-red-500/50 text-white px-4 py-3 flex items-start gap-3 animate-fadeIn z-[100] relative">
+            <svg class="w-6 h-6 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div class="flex-1">
+              <h4 class="font-bold text-sm text-red-400">System Error Detected</h4>
+              <p class="text-sm text-gray-200 mt-1">{{ errorService.currentError() }}</p>
+            </div>
+            <button (click)="errorService.clearError()" class="text-gray-400 hover:text-white p-1">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        }
+
+        <!-- Global Alert Banner -->
+        @if (showAlert()) {
+          <div class="bg-tenno-red/20 border-b border-tenno-red/50 text-white px-4 py-2 flex items-center justify-between animate-fadeIn">
+            <div class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-tenno-red animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span class="font-mono text-sm tracking-wide"><strong>ALERT:</strong> Fomorian Threat detected in the Pluto Proxima. All available Tenno report to Relay.</span>
+            </div>
+            <button (click)="dismissAlert()" class="text-gray-400 hover:text-white">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        }
+
         <!-- Header -->
         <header class="border-b border-gray-800 bg-black/50 sticky top-0 z-50 backdrop-blur-md">
           <div class="max-w-7xl mx-auto px-4 md:px-6 py-4">
@@ -36,10 +72,30 @@ type Tab = 'relay' | 'codex' | 'media' | 'telemetry' | 'comms';
                 </div>
               </div>
 
-              <!-- Date/Status -->
-              <div class="hidden md:block text-right">
-                <div class="text-[10px] text-gray-500 tracking-widest uppercase">System Date</div>
-                <div class="text-tenno-cyan font-mono text-xl font-bold glow-text">{{ today() }}</div>
+              <!-- Date/Status & Auth -->
+              <div class="hidden md:flex items-center gap-6 text-right">
+                <div>
+                  <div class="text-[10px] text-gray-500 tracking-widest uppercase">System Date</div>
+                  <div class="text-tenno-cyan font-mono text-xl font-bold glow-text">{{ today() }}</div>
+                </div>
+                
+                @if (user()) {
+                  <div class="flex items-center gap-3 border-l border-gray-800 pl-6">
+                    <div class="text-right">
+                      <div class="text-[10px] text-gray-500 tracking-widest uppercase">Operator</div>
+                      <div class="text-white font-mono text-sm font-bold">{{ user()?.displayName || 'Unknown' }}</div>
+                    </div>
+                    <button (click)="logout()" class="p-2 bg-gray-800 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    </button>
+                  </div>
+                } @else {
+                  <div class="border-l border-gray-800 pl-6">
+                    <button (click)="login()" class="px-4 py-2 bg-tenno-cyan/10 text-tenno-cyan border border-tenno-cyan/30 hover:bg-tenno-cyan/20 rounded font-mono text-xs uppercase tracking-wider transition-colors">
+                      Initialize Link
+                    </button>
+                  </div>
+                }
               </div>
             </div>
 
@@ -111,6 +167,19 @@ type Tab = 'relay' | 'codex' | 'media' | 'telemetry' | 'comms';
                 Comms Link
               </button>
 
+              <button (click)="setTab('arsenal')" 
+                      class="flex items-center gap-2 px-4 py-2 rounded transition-all whitespace-nowrap font-mono text-sm uppercase tracking-wide"
+                      [class.bg-gradient-to-r]="activeTab() === 'arsenal'"
+                      [class.from-tenno-gold]="activeTab() === 'arsenal'"
+                      [class.to-tenno-goldDim]="activeTab() === 'arsenal'"
+                      [class.text-black]="activeTab() === 'arsenal'"
+                      [class.font-bold]="activeTab() === 'arsenal'"
+                      [class.text-gray-400]="activeTab() !== 'arsenal'"
+                      [class.hover:text-white]="activeTab() !== 'arsenal'">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                Arsenal
+              </button>
+
             </nav>
           </div>
         </header>
@@ -118,24 +187,44 @@ type Tab = 'relay' | 'codex' | 'media' | 'telemetry' | 'comms';
         <!-- Main Content -->
         <main class="flex-1 max-w-7xl w-full mx-auto px-4 md:px-6 py-8 overflow-hidden">
           
-          @if (activeTab() === 'relay') {
-            <app-relay />
-          }
+          @if (!user()) {
+            <div class="h-full flex flex-col items-center justify-center text-center animate-fadeIn">
+              <div class="w-24 h-24 bg-tenno-cyan/10 rounded-full flex items-center justify-center mb-6 border border-tenno-cyan/30">
+                <svg class="w-12 h-12 text-tenno-cyan" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h2 class="text-3xl font-mono font-bold text-white mb-4">RESTRICTED ACCESS</h2>
+              <p class="text-gray-400 max-w-md mb-8">You must initialize a secure link to the Origin System to access Guild protocols and data.</p>
+              <button (click)="login()" class="px-8 py-4 bg-tenno-gold text-black font-bold uppercase tracking-wider rounded hover:bg-white transition-colors flex items-center gap-3">
+                <span>Initialize Link</span>
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+              </button>
+            </div>
+          } @else {
+            @if (activeTab() === 'relay') {
+              <app-relay />
+            }
 
-          @if (activeTab() === 'media') {
-            <app-media-flow />
-          }
+            @if (activeTab() === 'media') {
+              <app-media-flow />
+            }
 
-          @if (activeTab() === 'codex') {
-            <app-codex />
-          }
+            @if (activeTab() === 'codex') {
+              <app-codex />
+            }
 
-          @if (activeTab() === 'telemetry') {
-            <app-telemetry />
-          }
+            @if (activeTab() === 'telemetry') {
+              <app-telemetry />
+            }
 
-          @if (activeTab() === 'comms') {
-            <app-comms />
+            @if (activeTab() === 'comms') {
+              <app-comms />
+            }
+
+            @if (activeTab() === 'arsenal') {
+              <app-arsenal />
+            }
           }
 
         </main>
@@ -150,8 +239,11 @@ type Tab = 'relay' | 'codex' | 'media' | 'telemetry' | 'comms';
     </div>
   `
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
+  errorService = inject(GlobalErrorService);
   activeTab = signal<Tab>('relay');
+  showAlert = signal(true);
+  user = signal<User | null>(null);
   
   // Date Display
   today = computed(() => {
@@ -159,7 +251,40 @@ export class AppComponent {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.');
   });
 
+  ngOnInit() {
+    this.testConnection();
+    onAuthStateChanged(auth, (user) => {
+      this.user.set(user);
+    });
+  }
+
+  async testConnection() {
+    try {
+      await getDocFromServer(doc(db, 'test', 'connection'));
+    } catch (error) {
+      if(error instanceof Error && error.message.includes('the client is offline')) {
+        console.error("Please check your Firebase configuration. ");
+        this.errorService.handleError(new Error("Firebase connection failed. Please check your configuration."));
+      }
+    }
+  }
+
+  login() {
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider).catch(error => {
+      console.error("Login failed", error);
+    });
+  }
+
+  logout() {
+    signOut(auth);
+  }
+
   setTab(tab: Tab) {
     this.activeTab.set(tab);
+  }
+
+  dismissAlert() {
+    this.showAlert.set(false);
   }
 }

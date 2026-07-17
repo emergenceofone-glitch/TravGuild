@@ -1,0 +1,173 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: arsenal
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, max 100 chars)
+    //   - type: string (required, in ['Warframe', 'Primary', 'Secondary', 'Melee'])
+    //   - status: string (required, in ['Mastered', 'Forma-ing', 'Building'])
+    //   - formaCount: number (required, >= 0)
+    //   - uid: string (required, immutable)
+    //
+    // Collection: clips
+    // Document ID: auto-generated
+    // Fields:
+    //   - game: string (required, max 100 chars)
+    //   - date: string (required, max 50 chars)
+    //   - description: string (required, max 500 chars)
+    //   - quality: string (required, in ['S-Tier', 'A-Tier', 'B-Tier', 'C-Tier'])
+    //   - status: string (required, in ['Intake', 'Processing', 'Ready', 'Published'])
+    //   - platform: string (optional, max 100 chars)
+    //   - uid: string (required, immutable)
+    //
+    // Collection: codex
+    // Document ID: auto-generated
+    // Fields:
+    //   - type: string (required, max 100 chars)
+    //   - discovery: string (required, max 200 chars)
+    //   - value: number (required, >= 0)
+    //   - location: string (required, max 200 chars)
+    //   - operator: string (required, max 100 chars)
+    //   - isLocked: boolean (required)
+    //   - decryptionProgress: number (required, 0-100)
+    //   - uid: string (required, immutable)
+    //
+    // Collection: operators
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, max 100 chars)
+    //   - rep: number (required, >= 0, <= 5)
+    //   - region: string (required, max 100 chars)
+    //   - service: string (required, max 200 chars)
+    //   - status: string (required, in ['online', 'offline', 'busy'])
+    //   - description: string (required, max 500 chars)
+    //   - verified: boolean (required)
+    //   - uid: string (required, immutable)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+    
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidString(field, maxLen) {
+      return request.resource.data[field] is string && request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, maxLen) {
+      return !(field in request.resource.data) || (request.resource.data[field] is string && request.resource.data[field].size() <= maxLen);
+    }
+
+    // Domain Validators
+    function isValidArsenalItem() {
+      return hasRequiredFields(['name', 'type', 'status', 'formaCount', 'uid']) &&
+             isValidString('name', 100) &&
+             request.resource.data.type in ['Warframe', 'Primary', 'Secondary', 'Melee'] &&
+             request.resource.data.status in ['Mastered', 'Forma-ing', 'Building'] &&
+             request.resource.data.formaCount is number && request.resource.data.formaCount >= 0 &&
+             request.resource.data.uid is string;
+    }
+
+    function isValidMediaClip() {
+      return hasRequiredFields(['game', 'date', 'description', 'quality', 'status', 'uid']) &&
+             isValidString('game', 100) &&
+             isValidString('date', 50) &&
+             isValidString('description', 500) &&
+             request.resource.data.quality in ['S-Tier', 'A-Tier', 'B-Tier', 'C-Tier'] &&
+             request.resource.data.status in ['Intake', 'Processing', 'Ready', 'Published'] &&
+             isValidOptionalString('platform', 100) &&
+             request.resource.data.uid is string;
+    }
+
+    function isValidCodexEntry() {
+      return hasRequiredFields(['type', 'discovery', 'value', 'location', 'operator', 'isLocked', 'decryptionProgress', 'uid']) &&
+             isValidString('type', 100) &&
+             isValidString('discovery', 200) &&
+             request.resource.data.value is number && request.resource.data.value >= 0 &&
+             isValidString('location', 200) &&
+             isValidString('operator', 100) &&
+             request.resource.data.isLocked is bool &&
+             request.resource.data.decryptionProgress is number && 
+             request.resource.data.decryptionProgress >= 0 && request.resource.data.decryptionProgress <= 100 &&
+             request.resource.data.uid is string;
+    }
+
+    function isValidOperator() {
+      return hasRequiredFields(['name', 'rep', 'region', 'service', 'status', 'description', 'verified', 'uid']) &&
+             isValidString('name', 100) &&
+             request.resource.data.rep is number && request.resource.data.rep >= 0 && request.resource.data.rep <= 100 &&
+             isValidString('region', 100) &&
+             isValidString('service', 200) &&
+             request.resource.data.status in ['online', 'offline', 'busy'] &&
+             isValidString('description', 500) &&
+             request.resource.data.verified is bool &&
+             request.resource.data.uid is string;
+    }
+
+    function isValidHiringRecord() {
+      return hasRequiredFields(['operatorId', 'missionObjective', 'platinumOffered', 'timestamp', 'requesterId']) &&
+             isValidString('operatorId', 100) &&
+             isValidString('missionObjective', 500) &&
+             request.resource.data.platinumOffered is number && request.resource.data.platinumOffered >= 0 &&
+             isValidString('timestamp', 100) &&
+             request.resource.data.requesterId is string;
+    }
+
+    match /arsenal/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidArsenalItem() && uidUnchanged();
+      allow update: if isDocOwner() && isValidArsenalItem() && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /clips/{clipId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidMediaClip() && uidUnchanged();
+      allow update: if isDocOwner() && isValidMediaClip() && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /codex/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidCodexEntry() && uidUnchanged();
+      allow update: if isDocOwner() && isValidCodexEntry() && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /hiring_history/{recordId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidHiringRecord() && request.auth.uid == request.resource.data.requesterId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.requesterId && isValidHiringRecord() && request.auth.uid == request.resource.data.requesterId;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.requesterId;
+    }
+
+    match /operators/{operatorId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidOperator();
+      allow update: if isDocOwner() && isValidOperator() && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+  }
+}

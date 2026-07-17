@@ -4,8 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { GuildService } from '../../services/guild.service';
 import { GoogleGenAI } from '@google/genai';
 
-declare var process: any;
-
 interface SocialPost {
   handle: string;
   content: string;
@@ -42,6 +40,23 @@ interface SocialPost {
         </div>
       </div>
 
+      @if (apiError()) {
+        <div class="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-lg flex items-start gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+          <div>
+            <h4 class="font-bold text-sm">Communication Error</h4>
+            <p class="text-xs">{{ apiError() }}</p>
+          </div>
+          <button (click)="apiError.set(null)" class="ml-auto text-red-400 hover:text-red-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      }
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         <!-- Left Column: Composer -->
         <div class="lg:col-span-2 flex flex-col gap-6">
@@ -54,6 +69,10 @@ interface SocialPost {
                </label>
             </div>
 
+            <div class="flex gap-2 mb-2">
+              <input type="text" [(ngModel)]="customPrompt" placeholder="Custom AI Prompt (e.g., 'Make it sound like a Corpus merchant')" class="flex-1 bg-black/50 border border-white/10 rounded p-2 text-white focus:border-tenno-cyan outline-none text-sm">
+            </div>
+
             <textarea class="w-full flex-1 bg-tenno-dark border rounded p-4 text-gray-300 focus:outline-none transition-colors min-h-[150px] resize-none font-sans text-lg"
                       [class.border-tenno-red]="charCount() > 280"
                       [class.focus:border-tenno-red]="charCount() > 280"
@@ -62,6 +81,17 @@ interface SocialPost {
                       placeholder="Compose message for broadcast..."
                       [(ngModel)]="postContent"></textarea>
             
+            @if (generatedImage()) {
+              <div class="relative w-full max-w-md mx-auto mt-2 rounded-lg overflow-hidden border border-white/10">
+                <img [src]="generatedImage()" alt="Generated Broadcast Image" class="w-full h-auto object-cover">
+                <button (click)="generatedImage.set(null)" class="absolute top-2 right-2 bg-black/50 hover:bg-black/80 text-white p-1 rounded-full transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            }
+
             <!-- Grounding Sources Display -->
             @if (groundingMetadata()) {
               <div class="text-xs bg-black/30 p-2 rounded border border-gray-800">
@@ -79,21 +109,56 @@ interface SocialPost {
             }
 
             <div class="flex flex-wrap gap-4 justify-between items-center pt-2 border-t border-gray-800/50">
-              <button (click)="generatePostSuggestion()" [disabled]="isGenerating()"
-                      class="px-4 py-2 bg-tenno-cyan/10 text-tenno-cyan border border-tenno-cyan/30 rounded hover:bg-tenno-cyan/20 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold tracking-wide">
-                @if(isGenerating()) {
-                  <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>ANALYZING...</span>
-                } @else {
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  <span>AI SUGGEST</span>
-                }
-              </button>
+              <div class="flex gap-2">
+                <button (click)="generatePostSuggestion()" [disabled]="isGenerating() || isGeneratingImage()"
+                        class="px-4 py-2 bg-tenno-cyan/10 text-tenno-cyan border border-tenno-cyan/30 rounded hover:bg-tenno-cyan/20 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold tracking-wide">
+                  @if(isGenerating()) {
+                    <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>ANALYZING...</span>
+                  } @else {
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    <span>AI SUGGEST</span>
+                  }
+                </button>
+
+                <button (click)="generateImage()" [disabled]="isGenerating() || isGeneratingImage() || postContent().length === 0"
+                        class="px-4 py-2 bg-tenno-gold/10 text-tenno-gold border border-tenno-gold/30 rounded hover:bg-tenno-gold/20 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold tracking-wide"
+                        title="Generate an image based on the current post content">
+                  @if(isGeneratingImage()) {
+                    <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>RENDERING...</span>
+                  } @else {
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    <span>GEN IMAGE</span>
+                  }
+                </button>
+
+                <button (click)="generateDailyBriefing()" [disabled]="isGenerating() || isGeneratingImage()"
+                        class="px-4 py-2 bg-gray-500/10 text-gray-300 border border-gray-500/30 rounded hover:bg-gray-500/20 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold tracking-wide"
+                        title="Summarize guild daily progress (Media & Codex)">
+                  @if(isGenerating()) {
+                    <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>ANALYZING...</span>
+                  } @else {
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    <span>DAILY BRIEFING</span>
+                  }
+                </button>
+              </div>
 
               <div class="flex items-center gap-4">
+                <input type="datetime-local" [(ngModel)]="scheduledTime" 
+                       class="bg-black/50 border border-white/10 rounded px-3 py-2 text-gray-400 focus:border-tenno-cyan outline-none text-sm font-mono cursor-pointer transition-colors hover:border-white/30" 
+                       title="Schedule Broadcast (Optional)">
                 <span class="text-xs font-mono transition-colors duration-200" 
                       [class.text-tenno-red]="charCount() > 280"
                       [class.font-bold]="charCount() > 280"
@@ -107,9 +172,9 @@ interface SocialPost {
                 <button (click)="transmitPost()" [disabled]="isTransmitting() || postContent().length === 0 || charCount() > 280"
                         class="px-6 py-2 bg-tenno-gold text-black font-bold uppercase tracking-wider rounded hover:bg-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm disabled:bg-gray-700 disabled:text-gray-500">
                   @if(isTransmitting()) {
-                    <span>SENDING...</span>
+                    <span>{{ scheduledTime() ? 'SCHEDULING...' : 'SENDING...' }}</span>
                   } @else {
-                    <span>TRANSMIT</span>
+                    <span>{{ scheduledTime() ? 'SCHEDULE' : 'TRANSMIT' }}</span>
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                   }
                 </button>
@@ -160,11 +225,21 @@ interface SocialPost {
             <div class="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
               @for(log of transmissionLog(); track $index) {
                 <div class="opacity-70 border-l-2 border-tenno-gold pl-2 py-1">
-                  <div class="flex justify-between text-[10px] text-gray-500">
-                    <span>OUTBOUND</span>
-                    <span>{{ log.timestamp }}</span>
+                  <div class="flex flex-col mb-1 text-[10px] text-gray-500">
+                    <div class="flex justify-between">
+                      <span [class.text-tenno-cyan]="log.scheduledFor">
+                        {{ log.scheduledFor ? 'QUEUED' : 'OUTBOUND' }}
+                      </span>
+                      <span>{{ log.timestamp }}</span>
+                    </div>
+                    @if (log.scheduledFor) {
+                      <span class="text-tenno-cyan mt-0.5">SCHED: {{ log.scheduledFor }}</span>
+                    }
                   </div>
                   <div class="text-tenno-gold truncate">{{ log.content }}</div>
+                  @if (log.hasImage) {
+                    <div class="text-tenno-cyan text-[10px] mt-1">[IMAGE ATTACHED]</div>
+                  }
                 </div>
               }
               @if (transmissionLog().length === 0) {
@@ -193,40 +268,64 @@ export class CommsComponent {
   ai: GoogleGenAI | null = null;
   
   postContent = signal("The latest Tenno's Guild update is live! Check out our new media pipeline features and operator services.");
+  customPrompt = signal('');
   includeTrends = signal(false);
   isTransmitting = signal(false);
   isGenerating = signal(false);
+  isGeneratingImage = signal(false);
   isSyncing = signal(false);
+  scheduledTime = signal<string>('');
+  apiError = signal<string | null>(null);
+  generatedImage = signal<string | null>(null);
   
-  transmissionLog = signal<{content: string, timestamp: string}[]>([]);
+  transmissionLog = signal<{content: string, timestamp: string, hasImage?: boolean, scheduledFor?: string}[]>([]);
   incomingFeed = signal<SocialPost[]>([]);
   groundingMetadata = signal<any>(null);
   
   charCount = computed(() => this.postContent().length);
 
   constructor() {
-    if (process.env.API_KEY) {
-      this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (typeof GEMINI_API_KEY !== 'undefined' && GEMINI_API_KEY) {
+      this.ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    } else {
+      this.apiError.set("GEMINI_API_KEY is not configured. AI features will be disabled.");
     }
   }
 
   transmitPost() {
     this.isTransmitting.set(true);
     setTimeout(() => {
+      const scheduled = this.scheduledTime();
+      let scheduledFormatted;
+      if (scheduled) {
+        const d = new Date(scheduled);
+        scheduledFormatted = d.toLocaleDateString() + ' ' + d.toLocaleTimeString('en-GB', { hour12: false });
+      }
+
       const newLog = {
         content: this.postContent(),
-        timestamp: new Date().toLocaleTimeString('en-GB', { hour12: false })
+        timestamp: new Date().toLocaleTimeString('en-GB', { hour12: false }),
+        hasImage: !!this.generatedImage(),
+        scheduledFor: scheduledFormatted
       };
       this.transmissionLog.update(logs => [newLog, ...logs].slice(0, 10));
       this.postContent.set('');
+      this.generatedImage.set(null);
       this.groundingMetadata.set(null); // Clear context after send
+      this.scheduledTime.set('');
       this.isTransmitting.set(false);
     }, 1500);
   }
 
   async syncNetwork() {
-    if (!this.ai || this.isSyncing()) return;
+    if (!this.ai) {
+      this.apiError.set("Cannot sync network: AI is not initialized.");
+      return;
+    }
+    if (this.isSyncing()) return;
+    
     this.isSyncing.set(true);
+    this.apiError.set(null);
 
     try {
       // Create context based on actual app state for realistic fake replies
@@ -242,7 +341,7 @@ export class CommsComponent {
       Return ONLY a JSON array with objects having keys: handle (e.g. @VoidDrifter), content, time (e.g. '2m ago').`;
 
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: { responseMimeType: 'application/json' }
       });
@@ -260,16 +359,23 @@ export class CommsComponent {
 
       this.incomingFeed.set(coloredPosts);
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("Sync failed", e);
+      this.apiError.set(e.message || "Failed to sync network. Please try again.");
     } finally {
       this.isSyncing.set(false);
     }
   }
 
   async generatePostSuggestion() {
-    if (!this.ai || this.isGenerating()) return;
+    if (!this.ai) {
+      this.apiError.set("Cannot generate suggestion: AI is not initialized.");
+      return;
+    }
+    if (this.isGenerating()) return;
+    
     this.isGenerating.set(true);
+    this.apiError.set(null);
     this.groundingMetadata.set(null);
 
     try {
@@ -287,6 +393,10 @@ export class CommsComponent {
 
       let prompt = `Based on this context: "${context}", write a short, exciting, and professional social media post for X (formerly Twitter). Use relevant hashtags. Max 280 chars.`;
       
+      if (this.customPrompt()) {
+        prompt += `\n\nAdditional instructions: ${this.customPrompt()}`;
+      }
+      
       let tools = [];
       if (this.includeTrends()) {
         tools = [{googleSearch: {}}];
@@ -295,7 +405,7 @@ export class CommsComponent {
       }
 
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: { tools }
       });
@@ -306,9 +416,91 @@ export class CommsComponent {
         this.groundingMetadata.set(response.candidates[0].groundingMetadata);
       }
 
-    } catch(e) {
+    } catch(e: any) {
       console.error("Error generating content:", e);
-      this.postContent.set("Error: Connection disrupted. Check API key.");
+      this.apiError.set(e.message || "Failed to generate suggestion. Please try again.");
+    } finally {
+      this.isGenerating.set(false);
+    }
+  }
+
+  async generateImage() {
+    if (!this.ai) {
+      this.apiError.set("Cannot generate image: AI is not initialized.");
+      return;
+    }
+    if (this.isGeneratingImage() || !this.postContent()) return;
+    
+    this.isGeneratingImage.set(true);
+    this.apiError.set(null);
+
+    try {
+      const prompt = `A cinematic, high-quality image related to this social media post: "${this.postContent()}". Sci-fi, space ninja aesthetic, dark and moody with neon accents.`;
+      
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [
+            { text: prompt }
+          ]
+        }
+      });
+
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          const base64EncodeString: string = part.inlineData.data;
+          this.generatedImage.set(`data:image/png;base64,${base64EncodeString}`);
+          break;
+        }
+      }
+      
+      if (!this.generatedImage()) {
+        throw new Error("No image data returned from API.");
+      }
+
+    } catch(e: any) {
+      console.error("Error generating image:", e);
+      this.apiError.set(e.message || "Failed to generate image. Please try again.");
+    } finally {
+      this.isGeneratingImage.set(false);
+    }
+  }
+
+  async generateDailyBriefing() {
+    if (!this.ai) {
+      this.apiError.set("Cannot generate briefing: AI is not initialized.");
+      return;
+    }
+    if (this.isGenerating()) return;
+    
+    this.isGenerating.set(true);
+    this.apiError.set(null);
+    this.groundingMetadata.set(null);
+
+    try {
+      const clips = this.service.clips();
+      const codexEntries = this.service.codex();
+      
+      const publishedClips = clips.filter(c => c.status === 'Published').length;
+      const totalClips = clips.length;
+      
+      const unlockedCodex = codexEntries.filter(c => !c.isLocked).length;
+      const totalCodex = codexEntries.length;
+
+      let context = `Our guild currently has ${publishedClips} published media clips out of a total of ${totalClips}. `;
+      context += `We have also decrypted ${unlockedCodex} artifacts out of ${totalCodex} total codex entries.`;
+      
+      let prompt = `Based on these guild statistics: "${context}", write a short, exciting, and professional "Daily Briefing" social media post for X (formerly Twitter) summarizing the guild's daily progress. Use relevant hashtags. Max 280 chars. Make it sound like a space-ninja mission report.`;
+      
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+
+      this.postContent.set(response.text.trim());
+    } catch(e: any) {
+      console.error("Error generating briefing:", e);
+      this.apiError.set(e.message || "Failed to generate briefing. Please try again.");
     } finally {
       this.isGenerating.set(false);
     }

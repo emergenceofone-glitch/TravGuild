@@ -1,6 +1,7 @@
-import { Component, inject, OnDestroy, computed } from '@angular/core';
+import { Component, inject, OnDestroy, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GuildService } from '../../services/guild.service';
+import { GoogleGenAI, Type } from "@google/genai";
 
 @Component({
   selector: 'app-codex',
@@ -13,14 +14,28 @@ import { GuildService } from '../../services/guild.service';
           <h2 class="text-2xl font-mono font-bold text-white mb-1">Codex Archives</h2>
           <p class="text-gray-400 text-sm">Decrypt secured intelligence data.</p>
         </div>
-        <div class="text-right">
-           <div class="text-tenno-gold text-2xl font-mono font-bold">{{ unlockedCount() }} / {{ totalCount() }}</div>
-           <div class="text-xs text-gray-500 uppercase">Archives Decrypted</div>
+        <div class="flex items-center gap-4">
+          <button (click)="generateArtifact()" [disabled]="isGenerating()"
+                  class="px-4 py-2 bg-tenno-gold text-black font-mono font-bold rounded hover:bg-white transition-all disabled:opacity-50">
+            {{ isGenerating() ? 'Analyzing...' : 'Generate Artifact Entry' }}
+          </button>
+          <div class="flex bg-gray-900 rounded p-1">
+            <button (click)="sortType.set('discovery')"
+                    [class.bg-gray-800]="sortType() === 'discovery'"
+                    class="px-3 py-1.5 text-xs text-white font-mono rounded transition-colors">Date</button>
+            <button (click)="sortType.set('value')" 
+                    [class.bg-gray-800]="sortType() === 'value'"
+                    class="px-3 py-1.5 text-xs text-white font-mono rounded transition-colors">Value</button>
+          </div>
+          <div class="text-right">
+             <div class="text-tenno-gold text-2xl font-mono font-bold">{{ unlockedCount() }} / {{ totalCount() }}</div>
+             <div class="text-xs text-gray-500 uppercase">Archives Decrypted</div>
+          </div>
         </div>
       </div>
 
       <div class="grid grid-cols-1 gap-6">
-        @for (entry of service.codex(); track entry.id) {
+        @for (entry of sortedCodex(); track entry.id) {
           <div class="relative overflow-hidden glass-panel rounded-lg border border-gray-800 transition-all hover:border-gray-700">
             <!-- Background Matrix Effect for Locked -->
             @if (entry.isLocked) {
@@ -41,10 +56,14 @@ import { GuildService } from '../../services/guild.service';
                 </div>
                 
                 <h3 class="text-xl font-bold text-white mb-2">
-                  {{ entry.isLocked ? 'ENCRYPTED DATA SEGMENT' : entry.discovery }}
+                  {{ entry.isLocked ? 'ENCRYPTED DATA SEGMENT' : (entry.name || entry.discovery) }}
                 </h3>
                 
-                <div class="flex gap-4 text-sm text-gray-400 font-mono">
+                <p class="text-gray-300 mt-2 text-sm italic">
+                  {{ entry.isLocked ? 'Encrypted Data' : (entry.description || 'No description available.') }}
+                </p>
+                
+                <div class="flex gap-4 text-sm text-gray-400 font-mono mt-4">
                   <div class="flex items-center gap-1">
                     <span class="text-gray-600">LOC:</span> {{ entry.location }}
                   </div>
@@ -106,9 +125,60 @@ import { GuildService } from '../../services/guild.service';
 export class CodexComponent implements OnDestroy {
   service = inject(GuildService);
   activeTimers: any = {};
+  sortType = signal<'value' | 'discovery'>('discovery');
+  isGenerating = signal(false);
+  ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
   totalCount = computed(() => this.service.codex().length);
   unlockedCount = computed(() => this.service.codex().filter(e => !e.isLocked).length);
+  
+  sortedCodex = computed(() => {
+    const list = [...this.service.codex()];
+    if (this.sortType() === 'value') {
+      return list.sort((a, b) => b.value - a.value); // Descending order
+    } else {
+      return list.sort((a, b) => new Date(b.discovery).getTime() - new Date(a.discovery).getTime());
+    }
+  });
+
+  async generateArtifact() {
+    this.isGenerating.set(true);
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: "Generate a new ancient artifact for a codex archive. Return JSON.",
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              description: { type: Type.STRING },
+              location: { type: Type.STRING },
+              value: { type: Type.NUMBER }
+            }
+          }
+        }
+      });
+      const artifact = JSON.parse(response.text);
+      await this.service.addCodexEntry({
+        type: 'Ancient Artifact',
+        name: artifact.name,
+        discovery: new Date().toISOString(),
+        isLocked: true,
+        decryptionProgress: 0,
+        location: artifact.location,
+        value: artifact.value,
+        description: artifact.description,
+        operator: 'AI_AGENT'
+      });
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate artifact.');
+    } finally {
+      this.isGenerating.set(false);
+    }
+  }
 
   startDecryption(id: string) {
     if (this.activeTimers[id]) return;

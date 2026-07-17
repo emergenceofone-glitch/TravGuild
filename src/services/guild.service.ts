@@ -1,4 +1,58 @@
 import { Injectable, signal, computed } from '@angular/core';
+import { db, auth } from '../firebase';
+import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    isAnonymous?: boolean;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export interface Operator {
   id: string;
@@ -9,6 +63,16 @@ export interface Operator {
   status: 'online' | 'offline' | 'busy';
   description: string;
   verified: boolean;
+  uid: string;
+}
+
+export interface HiringRecord {
+  id: string;
+  operatorId: string;
+  missionObjective: string;
+  platinumOffered: number;
+  timestamp: string;
+  requesterId: string;
 }
 
 export interface MediaClip {
@@ -19,99 +83,204 @@ export interface MediaClip {
   quality: 'S-Tier' | 'A-Tier' | 'B-Tier' | 'C-Tier';
   status: 'Intake' | 'Processing' | 'Ready' | 'Published';
   platform?: string;
+  uid: string;
+}
+
+export interface ArsenalItem {
+  id: string;
+  name: string;
+  type: 'Warframe' | 'Primary' | 'Secondary' | 'Melee';
+  status: 'Mastered' | 'Forma-ing' | 'Building';
+  formaCount: number;
+  uid: string;
 }
 
 export interface CodexEntry {
   id: string;
   type: string;
+  name?: string;
   discovery: string;
   value: number;
   location: string;
   operator: string;
   isLocked: boolean;
   decryptionProgress: number; // 0-100
+  uid: string;
+  description?: string;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class GuildService {
-  // Operators Data
-  readonly operators = signal<Operator[]>([
-    { 
-      id: 'o1', name: 'Void_Hunter_77', rep: 4.9, region: 'Earth', service: 'Eidolon Carry', 
-      status: 'online', description: '5x3 Tridolon hunts, all shards guaranteed', verified: true 
-    },
-    { 
-      id: 'o2', name: 'Platinum_Appraiser', rep: 4.8, region: 'Relay Network', service: 'Riven Analysis', 
-      status: 'offline', description: 'Expert valuations for god-roll Rivens', verified: false 
-    },
-    { 
-      id: 'o3', name: 'Circuit_Optimizer', rep: 5.0, region: 'Zariman Ten Zero', service: 'Farm Routes', 
-      status: 'online', description: 'Steel Path efficiency maps & tile optimizations', verified: false 
-    },
-    {
-      id: 'o4', name: 'Nora_Night_Fan', rep: 4.2, region: 'Orbiter', service: 'Nightwave Help',
-      status: 'busy', description: 'Helping with weekly challenges', verified: true
-    }
-  ]);
-
-  // Media Flow Data (Kanban)
-  readonly clips = signal<MediaClip[]>([
-    { id: 'WF_001', game: 'Warframe', date: '2026-02-10', description: 'Eidolon Capture 5x3', quality: 'S-Tier', status: 'Published', platform: 'YouTube' },
-    { id: 'WF_002', game: 'Warframe', date: '2026-02-11', description: 'Rubico God Roll', quality: 'A-Tier', status: 'Ready', platform: 'TikTok' },
-    { id: 'WF_003', game: 'NMS', date: '2026-02-12', description: 'Base Build Speedrun', quality: 'B-Tier', status: 'Processing' },
-    { id: 'WF_004', game: 'Warframe', date: '2026-02-13', description: 'Steel Path Fail', quality: 'C-Tier', status: 'Intake' },
-    { id: 'WF_005', game: 'Warframe', date: '2026-02-13', description: 'Netracell Solo', quality: 'A-Tier', status: 'Intake' },
-  ]);
-
-  // Codex Data
-  readonly codex = signal<CodexEntry[]>([
-    {
-      id: 'codex_001', type: 'God-Roll Riven', discovery: 'Rubico Prime (+CC +MS +DMG)',
-      value: 4500, location: 'Kuva Fortress', operator: 'Void_Hunter_77', isLocked: true, decryptionProgress: 0
-    },
-    {
-      id: 'codex_002', type: 'Optimal Farm Route', discovery: 'Void Cascade Efficiency Map',
-      value: 1200, location: 'Zariman Ten Zero', operator: 'Circuit_Optimizer', isLocked: true, decryptionProgress: 0
-    },
-    {
-      id: 'codex_003', type: 'Market Insider', discovery: 'Arcane Energize Price Drop Prediction',
-      value: 800, location: 'Maroo\'s Bazaar', operator: 'Platinum_Appraiser', isLocked: true, decryptionProgress: 0
-    }
-  ]);
+  readonly operators = signal<Operator[]>([]);
+  readonly clips = signal<MediaClip[]>([]);
+  readonly arsenal = signal<ArsenalItem[]>([]);
+  readonly codex = signal<CodexEntry[]>([]);
 
   // Computed Stats
   readonly totalClips = computed(() => this.clips().length);
   readonly publishedCount = computed(() => this.clips().filter(c => c.status === 'Published').length);
   readonly pendingCount = computed(() => this.clips().filter(c => c.status !== 'Published').length);
 
-  // Actions
-  moveClip(clipId: string, newStatus: MediaClip['status']) {
-    this.clips.update(current => 
-      current.map(c => c.id === clipId ? { ...c, status: newStatus } : c)
+  private unsubscribes: (() => void)[] = [];
+
+  constructor() {
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        this.initListeners();
+      } else {
+        this.clearListeners();
+        this.operators.set([]);
+        this.clips.set([]);
+        this.arsenal.set([]);
+        this.codex.set([]);
+      }
+    });
+  }
+
+  private initListeners() {
+    this.clearListeners();
+
+    this.unsubscribes.push(
+      onSnapshot(collection(db, 'operators'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Operator));
+        this.operators.set(data);
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'operators'))
+    );
+
+    this.unsubscribes.push(
+      onSnapshot(collection(db, 'clips'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MediaClip));
+        this.clips.set(data);
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'clips'))
+    );
+
+    this.unsubscribes.push(
+      onSnapshot(collection(db, 'arsenal'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ArsenalItem));
+        this.arsenal.set(data);
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'arsenal'))
+    );
+
+    this.unsubscribes.push(
+      onSnapshot(collection(db, 'codex'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CodexEntry));
+        this.codex.set(data);
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'codex'))
     );
   }
 
-  startDecryption(id: string) {
-    // Simulation logic handles in component usually, but state update here
-    this.codex.update(entries => 
-      entries.map(e => e.id === id ? { ...e, decryptionProgress: 1 } : e)
-    );
+  private clearListeners() {
+    this.unsubscribes.forEach(unsub => unsub());
+    this.unsubscribes = [];
   }
 
-  updateDecryptionProgress(id: string, progress: number) {
-    this.codex.update(entries => 
-      entries.map(e => {
-        if (e.id !== id) return e;
-        const newProgress = progress;
-        const unlocked = newProgress >= 100;
-        return { 
-          ...e, 
-          decryptionProgress: newProgress,
-          isLocked: !unlocked
-        };
-      })
-    );
+  async updateOperator(id: string, data: Partial<Operator>) {
+    try {
+      await updateDoc(doc(db, 'operators', id), data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `operators/${id}`);
+    }
+  }
+
+  async addOperator(op: Omit<Operator, 'id' | 'uid'>) {
+    if (!auth.currentUser) return;
+    try {
+      await addDoc(collection(db, 'operators'), { ...op, uid: auth.currentUser.uid });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'operators');
+    }
+  }
+
+  getHiringHistoryQuery(operatorId: string) {
+    return query(collection(db, 'hiring_history'), where('operatorId', '==', operatorId));
+  }
+
+  async addHiringRecord(record: Omit<HiringRecord, 'id' | 'timestamp' | 'requesterId'>) {
+    if (!auth.currentUser) return;
+    try {
+      await addDoc(collection(db, 'hiring_history'), {
+        ...record,
+        timestamp: new Date().toISOString(),
+        requesterId: auth.currentUser.uid
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'hiring_history');
+    }
+  }
+
+  // --- Arsenal Actions ---
+  async addArsenalItem(item: Omit<ArsenalItem, 'id' | 'uid'>) {
+    if (!auth.currentUser) return;
+    try {
+      await addDoc(collection(db, 'arsenal'), { ...item, uid: auth.currentUser.uid });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'arsenal');
+    }
+  }
+
+  async updateArsenalItem(id: string, data: Partial<ArsenalItem>) {
+    try {
+      await updateDoc(doc(db, 'arsenal', id), data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `arsenal/${id}`);
+    }
+  }
+
+  async deleteArsenalItem(id: string) {
+    try {
+      await deleteDoc(doc(db, 'arsenal', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `arsenal/${id}`);
+    }
+  }
+
+  // --- Media Flow Actions ---
+  async addClip(clip: Omit<MediaClip, 'id' | 'uid'>) {
+    if (!auth.currentUser) return;
+    try {
+      await addDoc(collection(db, 'clips'), { ...clip, uid: auth.currentUser.uid });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'clips');
+    }
+  }
+
+  async moveClip(clipId: string, newStatus: MediaClip['status']) {
+    try {
+      await updateDoc(doc(db, 'clips', clipId), { status: newStatus });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `clips/${clipId}`);
+    }
+  }
+
+  // --- Codex Actions ---
+  async startDecryption(id: string) {
+    try {
+      await updateDoc(doc(db, 'codex', id), { decryptionProgress: 1 });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `codex/${id}`);
+    }
+  }
+
+  async updateDecryptionProgress(id: string, progress: number) {
+    const unlocked = progress >= 100;
+    try {
+      await updateDoc(doc(db, 'codex', id), { 
+        decryptionProgress: progress,
+        isLocked: !unlocked
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `codex/${id}`);
+    }
+  }
+
+  async addCodexEntry(entry: Omit<CodexEntry, 'id' | 'uid'>) {
+    if (!auth.currentUser) return;
+    try {
+      await addDoc(collection(db, 'codex'), { ...entry, uid: auth.currentUser.uid });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'codex');
+    }
   }
 }

@@ -1,11 +1,12 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { GuildService, MediaClip } from '../../services/guild.service';
 
 @Component({
   selector: 'app-media-flow',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="h-full flex flex-col animate-fadeIn">
       <div class="flex items-center justify-between mb-6">
@@ -13,15 +14,49 @@ import { GuildService, MediaClip } from '../../services/guild.service';
           <h2 class="text-2xl font-mono font-bold text-white mb-1">MediaFlow Pipeline</h2>
           <p class="text-gray-400 text-sm">Manage acquisition, processing, and publishing of Guild assets.</p>
         </div>
-        <button class="px-4 py-2 bg-tenno-gold text-black font-bold uppercase tracking-wider rounded hover:bg-white transition-colors flex items-center gap-2">
-          <span>+ Manual Intake</span>
+        <button (click)="showAddForm.set(!showAddForm())" class="px-4 py-2 bg-tenno-gold text-black font-bold uppercase tracking-wider rounded hover:bg-white transition-colors flex items-center gap-2">
+          <span>{{ showAddForm() ? 'Cancel' : '+ Manual Intake' }}</span>
         </button>
       </div>
+
+      @if (showAddForm()) {
+        <div class="glass-panel p-6 rounded-lg border border-tenno-gold/30 animate-fadeIn mb-6">
+          <h3 class="text-lg font-bold text-white mb-4">Add New Media Clip</h3>
+          <form (ngSubmit)="addClip()" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-gray-400 uppercase mb-1">Description</label>
+              <input type="text" [(ngModel)]="newClip.description" name="description" required class="w-full bg-black/50 border border-white/10 rounded p-2 text-white focus:border-tenno-gold outline-none">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 uppercase mb-1">Game</label>
+              <input type="text" [(ngModel)]="newClip.game" name="game" required class="w-full bg-black/50 border border-white/10 rounded p-2 text-white focus:border-tenno-gold outline-none">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 uppercase mb-1">Quality</label>
+              <select [(ngModel)]="newClip.quality" name="quality" required class="w-full bg-black/50 border border-white/10 rounded p-2 text-white focus:border-tenno-gold outline-none">
+                <option value="S-Tier">S-Tier</option>
+                <option value="A-Tier">A-Tier</option>
+                <option value="B-Tier">B-Tier</option>
+                <option value="C-Tier">C-Tier</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 uppercase mb-1">Platform (Optional)</label>
+              <input type="text" [(ngModel)]="newClip.platform" name="platform" class="w-full bg-black/50 border border-white/10 rounded p-2 text-white focus:border-tenno-gold outline-none">
+            </div>
+            <div class="md:col-span-2 flex justify-end">
+              <button type="submit" class="btn-primary">Save Clip</button>
+            </div>
+          </form>
+        </div>
+      }
 
       <!-- Kanban Board -->
       <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-4">
         @for (column of columns; track column.status) {
-          <div class="flex flex-col h-full bg-white/5 rounded-lg border border-white/5">
+          <div class="flex flex-col h-full bg-white/5 rounded-lg border border-white/5"
+               (dragover)="onDragOver($event)"
+               (drop)="onDrop($event, column.status)">
             <!-- Header -->
             <div class="p-3 border-b border-white/5 bg-black/20 flex justify-between items-center rounded-t-lg">
               <h3 class="font-mono font-bold text-gray-300">{{ column.label }}</h3>
@@ -33,9 +68,11 @@ import { GuildService, MediaClip } from '../../services/guild.service';
             <!-- Drop Zone / List -->
             <div class="flex-1 p-3 space-y-3 overflow-y-auto min-h-[300px]">
               @for (clip of getClipsByStatus(column.status); track clip.id) {
-                <div class="p-3 bg-tenno-panel border border-gray-700 rounded hover:border-tenno-gold/50 group transition-all relative">
+                <div class="p-3 bg-tenno-panel border border-gray-700 rounded hover:border-tenno-gold/50 group transition-all relative cursor-move"
+                     draggable="true"
+                     (dragstart)="onDragStart($event, clip)">
                   <div class="flex justify-between items-start mb-2">
-                    <span class="text-xs font-mono text-gray-500">{{ clip.id }}</span>
+                    <span class="text-xs font-mono text-gray-500">{{ clip.id | slice:0:8 }}</span>
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border"
                           [ngClass]="getQualityClass(clip.quality)">
                       {{ clip.quality }}
@@ -88,6 +125,15 @@ import { GuildService, MediaClip } from '../../services/guild.service';
 export class MediaFlowComponent {
   service = inject(GuildService);
 
+  showAddForm = signal(false);
+  newClip: Omit<MediaClip, 'id' | 'uid' | 'date'> = {
+    game: 'Warframe',
+    description: '',
+    quality: 'A-Tier',
+    status: 'Intake',
+    platform: ''
+  };
+
   columns: {status: MediaClip['status'], label: string}[] = [
     { status: 'Intake', label: '1. INTAKE' },
     { status: 'Processing', label: '2. PROCESSING' },
@@ -107,6 +153,15 @@ export class MediaFlowComponent {
     }
   }
 
+  async addClip() {
+    if (this.newClip.description && this.newClip.game) {
+      const date = new Date().toISOString().split('T')[0];
+      await this.service.addClip({ ...this.newClip, date });
+      this.showAddForm.set(false);
+      this.newClip = { game: 'Warframe', description: '', quality: 'A-Tier', status: 'Intake', platform: '' };
+    }
+  }
+
   advance(clip: MediaClip) {
     const order: MediaClip['status'][] = ['Intake', 'Processing', 'Ready', 'Published'];
     const idx = order.indexOf(clip.status);
@@ -120,6 +175,30 @@ export class MediaFlowComponent {
     const idx = order.indexOf(clip.status);
     if (idx > 0) {
       this.service.moveClip(clip.id, order[idx - 1]);
+    }
+  }
+
+  onDragStart(event: DragEvent, clip: MediaClip) {
+    if (event.dataTransfer) {
+      event.dataTransfer.setData('text/plain', clip.id);
+      event.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  onDragOver(event: DragEvent) {
+    event.preventDefault(); // Necessary to allow dropping
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  onDrop(event: DragEvent, newStatus: MediaClip['status']) {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      const clipId = event.dataTransfer.getData('text/plain');
+      if (clipId) {
+        this.service.moveClip(clipId, newStatus);
+      }
     }
   }
 }
